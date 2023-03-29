@@ -8,6 +8,7 @@ from aiogram.contrib.middlewares.logging import LoggingMiddleware
 from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters import Command, Text
 from aiogram.dispatcher.filters.state import State, StatesGroup
+from aiogram.contrib.middlewares.logging import LoggingMiddleware
 from aiogram.utils import executor
 from dotenv import load_dotenv
 
