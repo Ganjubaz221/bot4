@@ -1,15 +1,16 @@
 import os
-import ccxt
 import logging
+import requests
+
 from aiogram import Bot, types
 from aiogram.dispatcher import Dispatcher
-from aiogram.types import ParseMode
-from aiogram.contrib.middlewares.logging import LoggingMiddleware
 from aiogram.dispatcher import FSMContext
-from aiogram.dispatcher.filters import Command, Text
-from aiogram.dispatcher.filters.state import State, StatesGroup
-from aiogram.contrib.middlewares.logging import LoggingMiddleware
+from aiogram.dispatcher.filters import Command
+from aiogram.dispatcher.filters import Text
+from aiogram.dispatcher.storage.memory import MemoryStorage
+from aiogram.types import ParseMode
 from aiogram.utils import executor
+
 from dotenv import load_dotenv
 
 load_dotenv()
