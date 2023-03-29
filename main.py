@@ -2,10 +2,10 @@ import logging
 import os
 
 from aiogram import Bot, types
-from aiogram.contrib.middlewares.logging import LoggingMiddleware
 from aiogram.dispatcher import Dispatcher, FSMContext
-from aiogram.dispatcher.filters import Command
+from aiogram.dispatcher.filters import Text
 from aiogram.dispatcher.storage import MemoryStorage
+from aiogram.middleware.logging import LoggingMiddleware
 from aiogram.types import ParseMode
 from aiogram.utils import executor
 from aiogram.utils.helper import Helper, HelperMode, ListItem
@@ -39,7 +39,7 @@ def get_btc_rub_price():
 markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
 markup.add("Купить BTC", "Продать BTC")
 
-@dp.message_handler(Command("start"))
+@dp.message_handler(Text(equals="/start"))
 async def cmd_start(message: types.Message):
     await message.reply("Добро пожаловать в Simple BTC!\nВыберите действие:", reply_markup=markup)
 
