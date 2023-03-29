@@ -1,56 +1,43 @@
 import os
+import ccxt
 import logging
-import requests
-from aiogram import Bot, Dispatcher, types
-from aiogram.contrib.middlewares.logging import LoggingMiddleware
+from aiogram import Bot, types
+from aiogram.dispatcher import Dispatcher
 from aiogram.types import ParseMode
+from aiogram.contrib.middlewares.logging import LoggingMiddleware
 from aiogram.dispatcher import FSMContext
-from aiogram.dispatcher.filters import Command
+from aiogram.dispatcher.filters import Command, Text
+from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.utils import executor
-from aiogram.utils.markdown import text, escape_md
-from binance.client import Client
 from dotenv import load_dotenv
 
 load_dotenv()
-
-API_TOKEN = os.getenv("5683212966:AAFROD7629pEwgVHLOGyWap0vtKdxN3EdHE")
-CHAT_ID = int(os.getenv("358968367"))
-
-binance_api_key = os.getenv("zX6iKEIMBXY9dJyyz2a1etoKCEYcVtrAI4JqPrvc0ihVQWxGDCZyNYBpMiGOR66w")
-binance_api_secret = os.getenv("s80evkPVnOF6kk6nDkN1UwdyQdB446M3pxsSbaZtostVn2j34i8vSU3BuQjG3EF")
-
-binance_client = Client(binance_api_key, binance_api_secret)
+API_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+CHAT_ID = int(os.getenv("CHAT_ID"))
+BINANCE_API_KEY = os.getenv("BINANCE_API_KEY")
+BINANCE_SECRET_KEY = os.getenv("BINANCE_SECRET_KEY")
 
 logging.basicConfig(level=logging.INFO)
 
 bot = Bot(token=API_TOKEN)
-dp = Dispatcher(bot)
+dp = Dispatcher(bot, storage=MemoryStorage())
 dp.middleware.setup(LoggingMiddleware())
-
-# Реквизиты для оплаты
-payment_details = {
-    "Сбербанк": "Номер карты: 1234 5678 9012 3456\nИмя получателя: Иван Иванов",
-    "Тинькофф": "Номер карты: 2345 6789 0123 4567\nИмя получателя: Петр Петров",
-    "QIWI": "Номер кошелька: +79991234567\nИмя получателя: Сергей Сергеев",
-}
-
-def get_btc_rub_price():
-    ticker = binance_client.get_ticker_price(symbol="BTCRUB")
-    btc_rub_price = float(ticker["price"])
-    return btc_rub_price
-
-markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-markup.add("Купить BTC", "Продать BTC", "Поддержка")
-
-from aiogram.dispatcher.filters.state import State, StatesGroup
-from aiogram.contrib.middlewares.logging import LoggingMiddleware
 
 class Purchase(StatesGroup):
     sum = State()
     payment_method = State()
 
-class Sale(StatesGroup):
-    sum = State()
+binance = ccxt.binance({
+    "apiKey": BINANCE_API_KEY,
+    "secret": BINANCE_SECRET_KEY,
+})
+
+def get_btc_rub_price():
+    ticker = binance.fetch_ticker("BTC/RUB")
+    return ticker["ask"]
+
+markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+markup.add("Купить BTC", "Продать BTC")
 
 @dp.message_handler(Command("start"))
 async def cmd_start(message: types.Message):
@@ -61,7 +48,8 @@ async def buy_btc(message: types.Message):
     await message.reply("Укажите сумму в BTC или RUB:\n\nПример: 0.001 или 0,001 или 3940\n\nМинимальная сумма для обмена 1000 рублей или 0,0005 btc")
     await Purchase.sum.set()
 
-async def process_sum(message: types.Message, state: FSMContext):
+@dp.message_handler(lambda message: message.text, state=Purchase.sum)
+async def process_sum(message: types.Message, state):
     user_input = message.text.replace(',', '.')
     try:
         sum_value = float(user_input)
@@ -73,7 +61,7 @@ async def process_sum(message: types.Message, state: FSMContext):
         btc_rub_price = get_btc_rub_price()
         btc_amount = sum_value / btc_rub_price * 0.85
         await state.update_data(btc_amount=btc_amount)
-    elif 0.0005 <= sum_value < 1000/float(get_btc_rub_price()):
+    elif 0.0005 <= sum_value < 1000 / float(get_btc_rub_price()):
         await state.update_data(btc_amount=sum_value)
     else:
         await message.reply("Сумма должна быть минимум 1000 рублей или 0,0005 BTC.")
@@ -85,7 +73,7 @@ async def process_sum(message: types.Message, state: FSMContext):
     await Purchase.payment_method.set()
 
 @dp.message_handler(lambda message: message.text in ["Сбербанк", "Тинькофф", "QIWI"], state=Purchase.payment_method)
-async def process_payment_method(message: types.Message, state: FSMContext):
+async def process_payment_method(message: types.Message, state):
     user_data = await state.get_data()
     btc_amount = user_data["btc_amount"]
     payment_method = message.text
@@ -98,19 +86,14 @@ async def process_payment_method(message: types.Message, state: FSMContext):
 async def sell_btc(message: types.Message):
     await message.reply("Функция продажи BTC временно недоступна.")
 
-@dp.message_handler(lambda message: message.text == "Поддержка")
-async def support(message: types.Message):
-    await message.reply("Если у вас возникли вопросы или проблемы, обратитесь к @Pav_Glash")
-
-async def on_startup(dp):
-    await bot.send_message(chat_id=CHAT_ID, text="Бот запущен")
-
-async def on_shutdown(dp):
-    await bot.send_message(chat_id=CHAT_ID, text="Бот остановлен")
-
-    await bot.close()
+payment_details = {
+    "Сбербанк": "Номер карты: 1234 5678 1234 5678\nИмя: Иван Иванов\n",
+    "Тинькофф": "Номер карты: 2345 6789 2345 6789\nИмя: Иван Иванов\n",
+    "QIWI": "Номер телефона: +7 123 456 78 90\n",
+}
 
 if __name__ == "__main__":
     from aiogram import executor
+    from handlers import dp
 
-    executor.start_polling(dp, on_startup=on_startup, on_shutdown=on_shutdown)
+    executor.start_polling(dp, skip_updates=True)
